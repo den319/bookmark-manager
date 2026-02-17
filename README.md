@@ -1,8 +1,8 @@
 # 📌 Bookmark Manager
 
-A secure, responsive web application to save, manage, and organize personal bookmarks with authentication and real-time updates.
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white) ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
 
-Built with Next.js + Supabase.
+> A secure, responsive web application to save, manage, and organize personal bookmarks with authentication and real-time updates.
 
 ## 🚀 Features
 
@@ -132,22 +132,7 @@ Realtime inserts could introduce duplicate items across pages.
 - Ensured newest items appear first
 - Maintained stable ordering by `created_at`
 
-### 🗑️ 4. Delete Behavior
-
-**Problem:**  
-Deleted bookmarks were removed from UI but reappeared after refresh.
-
-**Root Cause:**  
-Item was only removed from local state, not database.
-
-**Solution:**  
-Implemented proper delete operation using Supabase:
-
-```javascript
-await supabase.from("bookmarks").delete().eq("id", id);
-```
-
-### 🔐 5. Client-Side Database Access Security
+### 🔐 4. Client-Side Database Access Security
 
 **Problem:**  
 Database operations occur directly from the frontend.
@@ -159,7 +144,7 @@ Security ensured using:
 - Public anon key (not service role key)
 - User-scoped policies
 
-### 📱 6. Mobile Responsiveness
+### 📱 5. Mobile Responsiveness
 
 **Problem:**  
 UI elements overflowed or stacked poorly on small screens.
@@ -170,7 +155,7 @@ UI elements overflowed or stacked poorly on small screens.
 - Full-width inputs and buttons on mobile
 - Optimized spacing
 
-### 🔔 7. User Feedback UX
+### 🔔 6. User Feedback UX
 
 **Problem:**  
 Using `alert()` created a poor user experience.
@@ -181,7 +166,7 @@ Implemented inline notification component:
 - Auto-dismiss after a few seconds
 - Non-blocking UI
 
-### 👤 8. Missing Avatar Handling
+### 👤 7. Missing Avatar Handling
 
 **Problem:**  
 Some users do not have `avatar_url` in metadata.
