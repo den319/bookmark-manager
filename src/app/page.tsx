@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { User } from "@supabase/supabase-js";
 
@@ -11,6 +11,7 @@ import AddBookmarkForm from "@/components/AddBookmarkForm";
 import BookmarkList from "@/components/BookmarkList";
 import UserAvatar from "@/components/UserAvatar";
 import Notification from "@/components/Notification";
+import next from "next";
 
 type Bookmark = {
   id: string;
@@ -18,6 +19,9 @@ type Bookmark = {
   url: string;
   created_at: string;
 };
+
+const PAGE_SIZE = 20;
+
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -31,6 +35,13 @@ export default function Home() {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
 
   // AUTH
   useEffect(() => {
@@ -47,37 +58,61 @@ export default function Home() {
   }, []);
 
   // FETCH
-  const fetchBookmarks = async (showLoader = true) => {
-    if (showLoader) setDataLoading(true);
+  const fetchBookmarks = async (pageToLoad = 0, append = false) => {
+    if (dataLoading) return;
 
-    const { data, error } = await supabase
+    setDataLoading(true);
+
+    const from = pageToLoad * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error, count } = await supabase
       .from("bookmarks")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
-    if (error) setErrorMessage(error.message);
-    else setBookmarks(data || []);
+    if (error) {
+      showError(error.message);
+    } else {
+      setBookmarks(data ?? []);
+      setTotalCount(count ?? 0);
+    }
 
-    if (showLoader) setDataLoading(false);
+    setDataLoading(false);
   };
 
   // REALTIME
   useEffect(() => {
-    if (!user) return() => {};
+    if (!user) return () => {};
 
-    fetchBookmarks(true);
+    fetchBookmarks(0);
 
     const channel = supabase
       .channel("bookmarks-changes")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "bookmarks" },
-        () => fetchBookmarks(false)
+        { event: "INSERT", schema: "public", table: "bookmarks" },
+        () => {
+          fetchBookmarks(page);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "bookmarks" },
+        () => {
+          fetchBookmarks(page);
+        }
       )
       .subscribe();
 
     return () => supabase.removeChannel(channel);
   }, [user]);
+
+  // Re-fetch when page changes
+  useEffect(() => {
+    if (user) fetchBookmarks(page);
+  }, [page]);
 
   // ADD
   const addBookmark = async () => {
@@ -93,34 +128,54 @@ export default function Home() {
 
     setActionLoading(true);
 
-    const { error } = await supabase.from("bookmarks").insert({
-      title,
-      url,
-      user_id: user!.id,
-    });
+    const { error } = await supabase
+      .from("bookmarks")
+      .insert({ title, url, user_id: user!.id });
 
-    if (error) showError(error.message);
+    if (error) {
+      showError(error.message);
+    } else {
+      setTitle("");
+      setUrl("");
+      // New bookmark goes to top — jump to page 0
+      setPage(0);
+      fetchBookmarks(0);
+    }
 
-    setTitle("");
-    setUrl("");
-    fetchBookmarks(false);
     setActionLoading(false);
   };
 
   // DELETE
   const deleteBookmark = async (id: string) => {
-    setActionLoading(true);
+    const item = bookmarks.find((b) => b.id === id);
+    if (!item) return;
+
+    // Optimistic remove from UI
+    setBookmarks((prev) => prev.filter((b) => b.id !== id));
+    setTotalCount((prev) => prev - 1);
 
     const { error } = await supabase
       .from("bookmarks")
       .delete()
       .eq("id", id);
 
-    if (error) showError(error.message);
+    if (error) {
+      // Rollback if DB delete fails
+      setBookmarks((prev) => [item, ...prev]);
+      setTotalCount((prev) => prev + 1);
+      showError(error.message);
+      return;
+    }
 
-    fetchBookmarks(false);
-    setActionLoading(false);
+    showSuccess("Bookmark deleted successfully!");
+
+    if (bookmarks.length === 1 && page > 0) {
+      setPage((p) => p - 1);
+    } else {
+      fetchBookmarks(page);
+    }
   };
+
 
   const handleCopy = (url: string) => {
     navigator.clipboard.writeText(url);
@@ -162,6 +217,8 @@ export default function Home() {
           onTitleChange={setTitle}
           onUrlChange={setUrl}
           onAdd={addBookmark}
+          setTitle={(v) => setTitle(v)}
+          setUrl={(v) => setUrl(v)}
         />
 
         <Notification
@@ -176,6 +233,34 @@ export default function Home() {
           onCopy={handleCopy}
           onDelete={deleteBookmark}
         />
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-4 py-6">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0 || dataLoading}
+              className="px-4 py-2 rounded bg-gray-800 text-white disabled:opacity-40 hover:bg-gray-700 transition-colors"
+            >
+              Prev
+            </button>
+
+            <span className="text-gray-400 text-sm">
+              Page {page + 1} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || dataLoading}
+              className="px-4 py-2 rounded bg-gray-800 text-white disabled:opacity-40 hover:bg-gray-700 transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+
+        {totalCount === 0 && !dataLoading && (
+          <p className="text-center text-gray-600 py-6">No bookmarks yet</p>
+        )}
       </main>
     </div>
   );
