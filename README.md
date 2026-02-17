@@ -1,37 +1,214 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📌 Bookmark Manager
 
-## Getting Started
+A secure, responsive web application to save, manage, and organize personal bookmarks with authentication and real-time updates.
 
-First, run the development server:
+Built with Next.js + Supabase.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🚀 Features
+
+- 🔐 Google OAuth authentication (Supabase Auth)
+- ➕ Add bookmarks (title + URL)
+- 🗑️ Delete bookmarks
+- 📋 Copy URL to clipboard
+- ⚡ Real-time updates using Supabase Realtime
+- 📱 Fully responsive dark UI
+- 🔒 Row Level Security (RLS)
+- 📑 Pagination for large datasets
+- 🧩 Component-based architecture
+- 🔔 Inline notifications (no alerts)
+
+## 🛠️ Tech Stack
+
+- **Frontend:** Next.js (App Router), React, TypeScript, Tailwind CSS
+- **Backend / DB:** Supabase (PostgreSQL)
+- **Auth:** Supabase Auth (Google OAuth)
+- **Realtime:** Supabase Realtime subscriptions
+
+## ⚙️ Setup Instructions
+
+1. **Clone the repository**
+   ```
+   git clone https://github.com/your-username/bookmark-manager.git
+   cd bookmark-manager
+   ```
+
+2. **Install dependencies**
+   ```
+   npm install
+   ```
+
+3. **Configure environment variables**
+
+   Create `.env.local`:
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_project_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   ```
+
+   ⚠️ Only use the anon public key on the client.
+
+4. **Run the development server**
+   ```
+   npm run dev
+   ```
+
+   Open: [http://localhost:3000](http://localhost:3000)
+
+## 🗄️ Database Schema
+
+**bookmarks table**
+
+| Column    | Type      | Description                  |
+|-----------|-----------|------------------------------|
+| id        | uuid      | Primary key                  |
+| title     | text      | Bookmark title               |
+| url       | text      | Bookmark URL                 |
+| user_id   | uuid      | References authenticated user|
+| created_at| timestamp | Creation time                |
+
+## 🔐 Security
+
+Row Level Security (RLS) is enabled.
+
+Users can only access their own bookmarks.
+
+**Example policy:**
+
+```
+auth.uid() = user_id
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📄 Application Architecture
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The UI is divided into reusable components:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Header** — Top navigation
+- **UserAvatar** — User info display
+- **AddBookmarkForm** — Add bookmark inputs
+- **BookmarkList** — Paginated bookmark display
+- **Notification** — Error/success messages
+- **AuthScreen** — Login screen
+- **LoadingScreen** — Initial loading state
 
-## Learn More
+## ⚠️ Problems Faced & Solutions
 
-To learn more about Next.js, take a look at the following resources:
+### 🧠 1. Handling Large Datasets
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Problem:**  
+Displaying all bookmarks at once caused performance issues when testing with thousands of records.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Solution:**  
+Implemented server-side pagination using Supabase `.range()` queries.
 
-## Deploy on Vercel
+**Benefits:**
+- Avoids rendering thousands of items
+- Reduces memory usage
+- Improves load time
+- Scales better for large datasets
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 🔁 2. Infinite Scroll Complexity
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# bookmark-manager
+**Problem:**  
+Initial attempt used lazy loading with Intersection Observer, but it introduced:
+- Observer edge cases
+- Trigger inconsistencies
+- Duplicate data risks with realtime updates
+- Debugging difficulty
+
+**Solution:**  
+Replaced infinite scroll with explicit pagination.
+
+**Reason:**  
+Pagination is simpler, more predictable, and production-friendly for very large datasets.
+
+### ⚡ 3. Realtime Updates + Pagination Collision
+
+**Problem:**  
+Realtime inserts could introduce duplicate items across pages.
+
+**Solution:**
+- Used ID-based merge logic to deduplicate records
+- Ensured newest items appear first
+- Maintained stable ordering by `created_at`
+
+### 🗑️ 4. Delete Behavior
+
+**Problem:**  
+Deleted bookmarks were removed from UI but reappeared after refresh.
+
+**Root Cause:**  
+Item was only removed from local state, not database.
+
+**Solution:**  
+Implemented proper delete operation using Supabase:
+
+```javascript
+await supabase.from("bookmarks").delete().eq("id", id);
+```
+
+### 🔐 5. Client-Side Database Access Security
+
+**Problem:**  
+Database operations occur directly from the frontend.
+
+**Solution:**  
+Security ensured using:
+- Supabase Row Level Security (RLS)
+- Authenticated requests only
+- Public anon key (not service role key)
+- User-scoped policies
+
+### 📱 6. Mobile Responsiveness
+
+**Problem:**  
+UI elements overflowed or stacked poorly on small screens.
+
+**Solution:**
+- Used Tailwind responsive utilities
+- Flexbox layout adjustments
+- Full-width inputs and buttons on mobile
+- Optimized spacing
+
+### 🔔 7. User Feedback UX
+
+**Problem:**  
+Using `alert()` created a poor user experience.
+
+**Solution:**  
+Implemented inline notification component:
+- Separate success and error states
+- Auto-dismiss after a few seconds
+- Non-blocking UI
+
+### 👤 8. Missing Avatar Handling
+
+**Problem:**  
+Some users do not have `avatar_url` in metadata.
+
+**Solution:**  
+Fallback to static avatar image.
+
+## 📊 Performance Notes
+
+Tested with 24,000+ bookmarks using pagination.
+
+Performance remained stable due to:
+- Limited page size
+- Controlled rendering
+- Efficient database queries
+- No large state accumulation
+
+## 🚧 Future Improvements
+
+- Edit bookmark feature
+- Search & filtering
+- Bookmark tags / folders
+- Server components for data fetching
+- Optimistic updates with undo support
+- Accessibility improvements
+- Offline support
+
+## 📜 License
+
+This project is for assessment/demo purposes.
